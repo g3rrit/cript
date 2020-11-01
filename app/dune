@@ -1,0 +1,4 @@
+(executable 
+    (name c0)
+    (libraries base core_kernel pipe)
+    (preprocess (pps ppx_jane ppx_deriving.show)))

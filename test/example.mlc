@@ -1,0 +1,26 @@
+
+struct int {}
+
+struct foo_t { 
+    b : int; 
+    a : () -> int;
+    c : (int, int) -> int;
+}
+
+struct bar_t {
+    a : int;
+}
+
+fn main () -> int {
+
+    let a : int = 10;
+
+foo:
+    
+    return 0;
+}
+
+
+fn lel(a : int, b : int) -> () -> int {
+    return 0;
+}

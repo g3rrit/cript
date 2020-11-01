@@ -1,0 +1,9 @@
+.stack-work/
+clam.cabal
+*~
+.vscode
+a.out
+a.exe
+_opam
+_build
+.merlin
