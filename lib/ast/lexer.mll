@@ -39,6 +39,7 @@ rule read =
   | "elif"    { ELIF }
   | "else"    { ELSE }
   | "return"  { RETURN }
+  | "module"  { MODULE }
   | "begin"   { BEGIN }
   | "end"     { END }
 

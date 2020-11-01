@@ -12,7 +12,7 @@ let usage_msg
     = "Usage: cx [options] file..."
 
 let () 
-    = printf "%s\n" "----- C0 LANG -----"
+    = printf "%s\n" "----- MLC LANG -----"
     ; let files = ref [] in
       Arg.parse arg_spec (fun s -> files := (String.split_on_char '/' s) :: !files) usage_msg
     ; run !files

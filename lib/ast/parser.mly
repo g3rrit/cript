@@ -11,6 +11,7 @@
 %token ELIF
 %token RETURN
 %token BEGIN
+%token MODULE
 %token END
 
 %token EQ
@@ -32,7 +33,7 @@
 %token EOF
 
 
-%start <Types.Toplevel.t list> entry
+%start <(string * string list * Types.Toplevel.t list)> entry
 
 %type <Types.Toplevel.t> p_toplevel
 %type <Types.Fn.t> p_fn
@@ -53,7 +54,8 @@
 %%
 
 entry:
-    | tls = list(p_toplevel); EOF { tls }
+    | MODULE; n = ID; LBRACE; incs = list(ID); RBRACE; tls = list(p_toplevel); EOF { (n, n :: incs, tls) }
+    | MODULE; n = ID; tls = list(p_toplevel); EOF { (n, [n], tls) }
 
 p_toplevel:
     | d = p_struct { Types.Toplevel.Struct d }

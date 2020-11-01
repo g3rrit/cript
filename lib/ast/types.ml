@@ -95,7 +95,9 @@ module Module = struct
 
     type t =
         { file : File.t
+        ; name : string
         ; tls  : Toplevel.t list
+        ; incs : string list
         }
     [@@deriving show]
 end

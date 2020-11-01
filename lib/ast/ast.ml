@@ -10,7 +10,7 @@ let parse (file : File.t) : Module.t =
     let inx = In_channel.create (File.to_string file) in
     let lexbuf = Lexing.from_channel inx in
     lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = (File.to_string file) };
-    let tls = try 
+    let (mn, incs, tls) = try 
         Parser.entry Lexer.read lexbuf 
     with _ ->
         begin
@@ -26,4 +26,4 @@ let parse (file : File.t) : Module.t =
                     ; msg = "unexpected token: " ^ tok
                     }))
         end
-    in { file = file; tls = tls }
+    in { file = file; name = mn; incs = incs; tls = tls }

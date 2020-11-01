@@ -83,15 +83,20 @@ module Module = struct
     type t =
         { file : File.t
         ; id   : int
-        ; cs   : Fn.t list
-        ; ds   : Struct.t list
+        ; fs   : (int, Fn.t, Int.comparator_witness) Map.t
+        ; ds   : (int, Struct.t, Int.comparator_witness) Map.t
+        ; incs : int list
         }
-    [@@deriving show]
+
+    let show (_ : t) : string =
+        "module"
 end
 
 module Unit = struct
     type t =
-        { mods : Module.t list
+        { mods : (int, Module.t, Int.comparator_witness) Map.t
         }
-    [@@deriving show]
+
+    let show (_ : t) : string =
+        "unit"
 end

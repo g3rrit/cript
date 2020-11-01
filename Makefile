@@ -3,7 +3,7 @@
 
 all:
 	dune build app/mlc.exe
-	./_build/default/app/c0.exe -c clang test/example.mlc
+	./_build/default/app/mlc.exe -c clang test/example.mlc
 
 # install necessary packages
 init:

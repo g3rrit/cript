@@ -134,7 +134,7 @@ module Conv = struct
                         | [] -> raise (Std.Error.Comp "type that should be present not found")
                         | x :: _ -> Map.find_exn x.fs s
                 in
-                let le = get_exp e ty_ns fn_ns var_ns structs in
+                let le = get_exp l ty_ns fn_ns var_ns structs in
                 let lt = I.Exp.get_type le in
                 (match lt with
                     | I.Type.Fn _   -> raise (Std.Error.Err "unable to access member of function expression")
@@ -166,7 +166,7 @@ module Conv = struct
                     (let (r, _) = (List.fold ss ~init:([], var_ns)  (* TODO: maybe fold other way here *)
                                                 ~f:(fun acc a -> 
                                                     let (ss, var_ns) = acc in
-                                                    let (s, nvar_ns) = (get_stm s ty_ns fn_ns var_ns structs) in
+                                                    let (s, nvar_ns) = (get_stm a ty_ns fn_ns var_ns structs) in
                                                     (s :: ss, nvar_ns)))
                      in r), var_ns)
             | A.Stm.Let (n, t, v) -> 
@@ -191,18 +191,39 @@ module Conv = struct
                                  } : I.Fn.t)
         ) (Map.empty (module Int)) m
 
-    let convert (ms : A.Module.t list) =
-        let ty_ns = Std.Map.merge_list (module String) (List.map ~f:(fun m -> get_ty_ns m) ms) (fun ~key:_ v0 _ -> v0) in
-        let structs = List.map ~f:(fun m -> get_struct m ty_ns) ms in
-        let fn_ns = Std.Map.merge_list (module String) (List.map ~f:(fun m -> get_fn_ns m ty_ns) ms) (fun ~key:_ v0 _ -> v0) in
-        let fns = List.map ~f:(fun m -> get_fn m ty_ns fn_ns structs) ms in
-        Stdio.printf "STRUCT:\n%s\nFUNCTION_NS:\n%sFUNCTION:\n%s\n" 
-            (List.map structs ~f:int_struct_map_show |> String.concat) 
-            (string_fn_map_show fn_ns)
-            (List.map fns ~f:int_fn_map_show |> String.concat) 
+    let get_mod_ns (ms : A.Module.t list) : string_int_map = 
+        List.fold ms ~init:(Map.empty (module String)) ~f:(fun acc a -> Map.add_exn acc ~key:a.name ~data:(next_ident ()))
 
+    let includes (xs : (int * ('a, 'v, 'cmp) Base.Map.t) list) (m : A.Module.t) (mod_ns : string_int_map) (comp : ('a, 'cmp) Core.Map.comparator) : ('a, 'v, 'cmp) Base.Map.t =
+        let mids = List.map m.incs ~f:(fun a -> Map.find_exn mod_ns a) in
+        let fs   = List.filter xs ~f:(function (a, _) -> List.exists mids ~f:(fun b -> Int.equal a b)) in
+        let fss  = List.map fs ~f:(function (_, a) -> a) in
+        Std.Map.merge_list comp fss (fun ~key:_ a _ -> a) 
 
-        
-
+    let convert (ms : A.Module.t list) : I.Unit.t = (* this is all so inefficient *)
+        let mod_ns = get_mod_ns ms in
+        let get_mid k = Map.find_exn mod_ns k in
+        let ty_nss = List.map ~f:(fun m -> (get_mid m.name, get_ty_ns m)) ms in
+        let structss = List.map ~f:(fun m -> (get_mid m.name, get_struct m (includes ty_nss m mod_ns (module String)))) ms in
+        let fn_nss = List.map ~f:(fun m -> (get_mid m.name, get_fn_ns m (includes ty_nss m mod_ns (module String)))) ms in
+        let fnss = List.map ~f:(fun m -> (get_mid m.name, get_fn m 
+                                    (includes ty_nss m mod_ns (module String)) 
+                                    (includes fn_nss m mod_ns (module String)) 
+                                    (includes structss m mod_ns (module Int))))
+                                    ms
+        in
+        let struct_map = Map.of_alist_exn (module Int) structss in
+        let fn_map = Map.of_alist_exn (module Int) fnss in 
+        { mods = (List.fold ms ~init:(Map.empty (module Int)) 
+                               ~f:(fun acc m -> 
+                                let mid = get_mid m.name in
+                                Map.add_exn acc ~key:mid
+                                                ~data:({ file = m.file
+                                                       ; id = mid
+                                                       ; fs = Map.find_exn fn_map mid
+                                                       ; ds = Map.find_exn struct_map mid
+                                                       ; incs = List.map m.incs ~f:get_mid
+                                                       } : I.Module.t)))
+        }
 
 end
