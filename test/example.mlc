@@ -23,6 +23,6 @@ foo:
 }
 
 
-fn lel(a : int, b : int) -> () -> int {
+fn lel(a : int, b : int) -> () -> (int) -> int {
     return 0;
 }
