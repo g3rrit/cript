@@ -36,18 +36,16 @@ module Exp = struct
         | Ref of int * Type.t
         | Prim of prim
         | Access of t * int * Type.t
-        | Call of t
     [@@deriving show]
 
     let get_ptype = function
         | PInt _    -> Type.Prim 0
         | PString _ -> Type.Prim 1
 
-    let rec get_type = function
+    let get_type = function
         | App (_, _, t)    -> t
         | Ref (_, t)       -> t
         | Access (_, _, t) -> t
-        | Call e           -> get_type e
         | Prim p           -> get_ptype p
 end
 

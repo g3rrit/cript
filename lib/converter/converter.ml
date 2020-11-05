@@ -126,7 +126,12 @@ let rec get_exp (e : A.Exp.t) (ty_ns : string_type_map) (fn_ns : string_fn_map) 
     match e with
         | A.Exp.Prim p        -> I.Exp.Prim (get_pexp p)
         | A.Exp.Ref s         -> let v = (Map.find_exn var_ns s) in I.Exp.Ref (v.id, v.ty)
-        | A.Exp.Call e        -> I.Exp.Call (get_exp e ty_ns fn_ns var_ns structs)
+        | A.Exp.Call e        -> 
+            let le = get_exp e ty_ns fn_ns var_ns structs in
+            let t = I.Exp.get_type le in
+            (match t with
+                | I.Type.Fn ([], r) -> I.Exp.App (le, [], r) (* TODO: better error for not enough arguments *)
+                | _ -> raise (Std.Error.Err "Cannot call variable of non function type"))
         | A.Exp.Access (l, r) -> 
             let find_ty_by_int i s =  (* this is probably the most inefficient function i have yet written *)
                 match Map.filter ty_ns ~f:(fun a -> Int.equal a.id i) |> Map.data with
