@@ -13,6 +13,8 @@
 %token BEGIN
 %token MODULE
 %token END
+%token JMP
+%token BREAK
 
 %token EQ
 %token PIPE
@@ -55,8 +57,8 @@
 %%
 
 entry:
-    | MODULE; n = ID; LBRACE; incs = list(ID); RBRACE; tls = list(p_toplevel); EOF { (n, n :: incs, tls) }
-    | MODULE; n = ID; tls = list(p_toplevel); EOF { (n, [n], tls) }
+    | MODULE; n = ID; LBRACE; incs = list(ID); RBRACE; tls = list(p_toplevel); EOF { (n, "__prim" :: n :: incs, tls) }
+    | MODULE; n = ID; tls = list(p_toplevel); EOF { (n, ["__prim"; n], tls) }
 
 p_toplevel:
     | d = p_struct { Types.Toplevel.Struct d }
@@ -110,9 +112,9 @@ p_var:
 
 p_stm:
     | e = p_exp; SEMICOLON { Types.Stm.Exp e }
-    | RETURN; e = option(p_exp); SEMICOLON { Types.Stm.Return e }
     | v = p_var; SEMICOLON { Types.Stm.Let v }
-    | n = option(ID); LBRACK; vs = separated_list(COMMA, p_var) RBRACK; e = option(p_exp); LBRACE; stms = list(p_stm); RBRACE { 
-        Types.Stm.Scope (n, vs, e, stms) }
-    | n = option(ID); e = option(exp); LBRACE; stms = list(p_stm); RBRACE {
-        Types.Stm.Scope (n, [], e, stms) }
+    | RETURN; e = option(p_exp); SEMICOLON { Types.Stm.Return e }
+    | JMP; n = option(ID); SEMICOLON { Types.Stm.Jump n}
+    | BREAK; n = option(ID); SEMICOLON { Types.Stm.Break n}
+    | BEGIN; n = option(ID); LBRACK; vs = separated_list(COMMA, p_var) RBRACK; me = option(p_exp); LBRACE; stms = list(p_stm); RBRACE { 
+        Types.Stm.Scope (n, vs, me, stms) }

@@ -1,4 +1,4 @@
 (library 
     (name codegen)
-    (libraries base core std ir)
+    (libraries core std ir)
     (preprocess (pps ppx_jane -allow-unannotated-ignores)))

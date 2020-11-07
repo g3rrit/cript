@@ -1,5 +1,5 @@
 open Std
-open Base
+open Core
 
 module Type = struct 
     type t =
@@ -56,12 +56,18 @@ module Stm = struct
         ; v  : Exp.t
         }
 
+    let pp_var _ _ = ()
+
     type t =
         | Scope of int * var list * Exp.t option * t list
         | Let of var
         | Exp of Exp.t
         | Return of Exp.t option
+        | Jump of int
+        | Break of int
     [@@deriving show]
+
+
 end
 
 module Fn = struct 

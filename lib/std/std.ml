@@ -1,4 +1,3 @@
-open Base
 open Core
 
 type string_int_map = (string, int, String.comparator_witness) Map.t

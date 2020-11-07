@@ -1,4 +1,4 @@
 (executable 
     (name mlc)
-    (libraries base core_kernel pipe)
+    (libraries core pipe)
     (preprocess (pps ppx_jane ppx_deriving.show)))

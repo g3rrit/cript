@@ -1,4 +1,3 @@
-open Base
 open Std
 
 module Config = Config

@@ -1,4 +1,4 @@
 (library 
     (name pipe)
-    (libraries core core_kernel std ast ir converter codegen config)
+    (libraries core std ast ir converter codegen config)
     (preprocess (pps ppx_jane ppx_deriving.show)))

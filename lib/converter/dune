@@ -1,4 +1,4 @@
 (library 
     (name converter)
-    (libraries base core std ast ir)
+    (libraries core std ast ir)
     (preprocess (pps ppx_jane ppx_deriving.show)))

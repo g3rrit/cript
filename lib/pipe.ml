@@ -1,6 +1,5 @@
-open Core
-open Stdio
 open Std
+open Core
 
 module A = Ast
 module I = Ir
@@ -18,7 +17,7 @@ let convert_mods (ms : A.Types.Module.t list) : I.Types.Unit.t =
 let rec run (fs : File.t list) : unit = 
     ignore (List.map fs ~f:(fun s -> File.to_string s |> printf "%s\n") : unit list);
     printf "%s\n" (Config.to_string ());
-    try pipe fs with | e -> Error.handle e;
+    try pipe fs with | e -> Std.Error.handle e;
 
 and pipe (fs : File.t list) : unit =
     let ms : A.Types.Module.t list = parse_mods fs in 

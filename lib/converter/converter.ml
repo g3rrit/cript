@@ -1,47 +1,11 @@
 open Std
-open Base
+open Core
+open Prim
+
+open Namespace
 
 module A = Ast.Types
 module I = Ir.Types
-
-
-(* helper types *)
-type type_ns = 
-    { id : int
-    ; fs : string_int_map
-    }
-
-type string_type_map = (string, type_ns, String.comparator_witness) Map.t
-let string_type_map_show (stm : string_type_map) : string =
-    Map.fold stm ~init:"" ~f:(fun ~key:k ~data:d a -> String.concat [a ; k; ": "; Int.to_string d.id; string_int_map_show d.fs; "\n"] ) 
-
-type int_struct_map = (int, I.Struct.t, Int.comparator_witness) Map.t
-let int_struct_map_show (ism : int_struct_map) : string =
-    Map.fold ism ~init:"" ~f:(fun ~key:_ ~data:d a -> String.concat [a ; I.Struct.show d; "\n"])
-
-type fn_ns = 
-    { id : int
-    ; ty : (I.Type.t list * I.Type.t)
-    }
-
-type string_fn_map = (string, fn_ns, String.comparator_witness) Map.t
-let string_fn_map_show (sfm : string_fn_map) : string =
-    Map.fold sfm ~init:"" ~f:(fun ~key:k ~data:d a -> String.concat [a ; k; ": "; Int.to_string d.id; "..." ])
-
-type int_fn_map = (int, I.Fn.t, Int.comparator_witness) Map.t
-let int_fn_map_show (ifm : int_fn_map) : string =
-    Map.fold ifm ~init:"" ~f:(fun ~key:_ ~data:d a -> String.concat [a ; I.Fn.show d; "\n"])
-
-type var_ns =
-    { id : int
-    ; ty : I.Type.t
-    }
-
-type string_var_list = var_ns list
-
-type string_var_map = (string, var_ns, String.comparator_witness) Map.t
-let string_var_map_show (svm : string_var_map) : string =
-    Map.fold svm ~init:"" ~f:(fun ~key:k ~data:d a -> String.concat [a ; k; ": "; Int.to_string d.id; "#"; I.Type.show d.ty ])
 
 (* converter functions *)
 let cident = ref 0
@@ -49,16 +13,16 @@ let cident = ref 0
 let next_ident () = let ii = !cident in cident := !cident + 1; ii
 
 let init () = 
-    cident := 0
+    cident := 0x1000 (* all prior symbols are reserved *)
     
 let fold_struct (f : 'a -> A.Struct.t -> 'a) (a: 'a) (m : A.Module.t) : 'a = 
-    List.fold_left m.tls ~init:a ~f:(fun aa tl -> (match tl with
+    List.fold m.tls ~init:a ~f:(fun aa tl -> (match tl with
             | A.Toplevel.Struct s -> f aa s
             | A.Toplevel.Fn _     -> aa
         ))
 
 let fold_fn (f : 'a -> A.Fn.t -> 'a) (a: 'a) (m : A.Module.t) : 'a = 
-    List.fold_left m.tls ~init:a ~f:(fun aa tl -> (match tl with
+    List.fold m.tls ~init:a ~f:(fun aa tl -> (match tl with
             | A.Toplevel.Struct _ -> aa
             | A.Toplevel.Fn ff    -> f aa ff
         ))
@@ -163,19 +127,13 @@ let rec get_exp (e : A.Exp.t) (ty_ns : string_type_map) (fn_ns : string_fn_map) 
                              else I.Exp.App (le, res, fr)
 
 
-        | A.Stm.Let (n, t, v) -> 
-            let lt = get_ty ty_ns t in
-            let ni = next_ident () in
-            let nvar_ns = Map.update var_ns n ~f:(fun _ -> {id = ni; ty = lt }) in
-            (I.Stm.Let (ni, lt, get_exp v ty_ns fn_ns var_ns structs), nvar_ns)
-
 let get_var (v : A.Stm.var) (ty_ns : string_type_map) (fn_ns : string_fn_map) (var_ns : string_var_map) (structs : int_struct_map)
         : I.Stm.var =
-    let lt = get_ty ty_ns t in
+    let lt = get_ty ty_ns v.ty in
     let ni = next_ident () in
     { id = ni
     ; ty = lt
-    ; v = get_exp v ty_ns fn_ns var_ns structs
+    ; v = get_exp v.v ty_ns fn_ns var_ns structs
     }
 
 let rec get_stm 
@@ -184,7 +142,7 @@ let rec get_stm
         (fn_ns : string_fn_map) 
         (var_ns : string_var_map) 
         (structs : int_struct_map) 
-        (lable_ns : string_int_map)
+        (label_ns : string_int_map)
         : (I.Stm.t * string_var_map) =
     match s with
         | A.Stm.Scope (mn, vs, me, ss) -> 
@@ -197,16 +155,22 @@ let rec get_stm
                                         let nvar_ns = Map.update var_ns a.name ~f:(fun _ -> { id = v.id; ty = v.ty } ) in
                                         (v :: vs, nvar_ns))
             in
-            let ne = Option.map me ~f:(fun a -> get_exp a ty_ns fn_ns var_ns structs) in
+            let ne = Option.map me ~f:(fun a -> get_exp a ty_ns fn_ns nvar_ns structs) in
             let nss = get_stm_list ss ty_ns fn_ns nvar_ns structs nlabel_ns in
-            (I.Stm.Scope (ni, vss, ne, nss), var_ns)
+            (I.Stm.Scope (ni, List.rev vss, ne, nss), var_ns)
         | A.Stm.Let v -> 
             let lt = get_ty ty_ns v.ty in
             let ni = next_ident () in
             let nvar_ns = Map.update var_ns v.name ~f:(fun _ -> {id = ni; ty = lt }) in
-            (I.Stm.Let (I.Stm.var { id = ni; ty = lt; v = get_exp v.v ty_ns fn_ns var_ns structs }), nvar_ns)
+            (I.Stm.Let ({ id = ni; ty = lt; v = get_exp v.v ty_ns fn_ns var_ns structs }), nvar_ns)
         | A.Stm.Exp e         -> (I.Stm.Exp (get_exp e ty_ns fn_ns var_ns structs), var_ns)
         | A.Stm.Return me     -> (I.Stm.Return (Option.map me ~f:(fun a -> get_exp a ty_ns fn_ns var_ns structs)), var_ns)
+        | A.Stm.Jump mn       -> 
+            let v = Map.find_exn label_ns (Option.value mn ~default:"__label") in
+            (I.Stm.Jump v, var_ns)
+        | A.Stm.Break mn       -> 
+            let v = Map.find_exn label_ns (Option.value mn ~default:"__label") in
+            (I.Stm.Break v, var_ns)
 
 and get_stm_list 
         (ss: A.Stm.t list)
@@ -219,9 +183,9 @@ and get_stm_list
     let (r, _) = List.fold ss ~init:([], var_ns) (* TODO: maybe fold other way *)
                               ~f:(fun acc a ->
                                     let (ss, var_ns) = acc in
-                                    let (s, nvar_ns) = (get_stm a ty_ns fn_ns var_ns structs) in
+                                    let (s, nvar_ns) = (get_stm a ty_ns fn_ns var_ns structs label_ns) in
                                     (s :: ss, nvar_ns))
-    in r
+    in List.rev r
 
 
 let get_fn (m : A.Module.t) (ty_ns : string_type_map) (fn_ns : string_fn_map) (structs : int_struct_map): int_fn_map =
@@ -238,9 +202,9 @@ let get_fn (m : A.Module.t) (ty_ns : string_type_map) (fn_ns : string_fn_map) (s
     ) (Map.empty (module Int)) m
 
 let get_mod_ns (ms : A.Module.t list) : string_int_map = 
-    List.fold ms ~init:(Map.empty (module String)) ~f:(fun acc a -> Map.add_exn acc ~key:a.name ~data:(next_ident ()))
+    List.fold ms ~init:(Map.singleton (module String) "__prim" 0) ~f:(fun acc a -> Map.add_exn acc ~key:a.name ~data:(next_ident ()))
 
-let includes (xs : (int * ('a, 'v, 'cmp) Base.Map.t) list) (m : A.Module.t) (mod_ns : string_int_map) (comp : ('a, 'cmp) Core.Map.comparator) : ('a, 'v, 'cmp) Base.Map.t =
+let includes (xs : (int * ('a, 'v, 'cmp) Map.t) list) (m : A.Module.t) (mod_ns : string_int_map) (comp : ('a, 'cmp) Map.comparator) : ('a, 'v, 'cmp) Map.t =
     let mids = List.map m.incs ~f:(fun a -> Map.find_exn mod_ns a) in
     let fs   = List.filter xs ~f:(function (a, _) -> List.exists mids ~f:(fun b -> Int.equal a b)) in
     let fss  = List.map fs ~f:(function (_, a) -> a) in
@@ -249,9 +213,9 @@ let includes (xs : (int * ('a, 'v, 'cmp) Base.Map.t) list) (m : A.Module.t) (mod
 let convert (ms : A.Module.t list) : I.Unit.t = (* this is all so inefficient *)
     let mod_ns = get_mod_ns ms in
     let get_mid k = Map.find_exn mod_ns k in
-    let ty_nss = List.map ~f:(fun m -> (get_mid m.name, get_ty_ns m)) ms in
+    let ty_nss = prim_ty_ns :: (List.map ~f:(fun m -> (get_mid m.name, get_ty_ns m)) ms) in
     let structss = List.map ~f:(fun m -> (get_mid m.name, get_struct m (includes ty_nss m mod_ns (module String)))) ms in
-    let fn_nss = List.map ~f:(fun m -> (get_mid m.name, get_fn_ns m (includes ty_nss m mod_ns (module String)))) ms in
+    let fn_nss = prim_fn_ns :: (List.map ~f:(fun m -> (get_mid m.name, get_fn_ns m (includes ty_nss m mod_ns (module String)))) ms) in
     let fnss = List.map ~f:(fun m -> (get_mid m.name, get_fn m 
                                 (includes ty_nss m mod_ns (module String)) 
                                 (includes fn_nss m mod_ns (module String)) 

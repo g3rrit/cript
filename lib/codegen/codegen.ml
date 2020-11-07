@@ -1,5 +1,4 @@
 open Std
-open Base
 open Core
 
 open Ir.Types
@@ -91,12 +90,17 @@ let rec cgen_stm (fd: Out_channel.t) (stm: Stm.t) : unit =
                                                                      ; cgen_exp fd e
                                                                      ; write fd ")) { goto l%d_end; }\n" n)
                                        ; write fd "{\n"
-                                       ; List.iter ss ~f:(cgen_stm fd)
+                                       ; (match ss with 
+                                            | [] -> assert false
+                                            | s :: _ -> cgen_stm fd s)
+                                       (*List.iter ss ~f:(cgen_stm fd) *)
                                        ; write fd "}\n}\nl%d_end:\n" n
         | Stm.Let v -> cgen_var fd v
         | Stm.Exp e         -> cgen_exp fd e; write fd ";\n"
         | Stm.Return me     -> write fd "return "
                                ; Option.map me ~f:(cgen_exp fd) |> ignore; write fd ";\n"
+        | Stm.Jump n        -> write fd "goto l%d_start;\n" n
+        | Stm.Break n       -> write fd "goto l%d_end;\n" n
 
 let cgen_fn (fd: Out_channel.t) (f: Fn.t) : unit =
     cgen_fn_decl fd f

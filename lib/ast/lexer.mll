@@ -42,6 +42,8 @@ rule read =
   | "module"  { MODULE }
   | "begin"   { BEGIN }
   | "end"     { END }
+  | "jmp"     { JMP }
+  | "brk"     { BREAK }
 
   (* builtin operators *)
   | '='       { EQ }

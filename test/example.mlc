@@ -15,9 +15,18 @@ struct bar_t {
 
 fn main () -> int {
 
-    let a : int = 10;
+    a : int = 2;
 
-foo:
+    b : int = a;
+
+    begin a [] {
+        return 0;
+    }
+
+    begin a [ i : int = 10 ] i {
+        jmp a;
+        brk a;
+    }
     
     return 0;
 }

@@ -1,4 +1,4 @@
-open Base
+open Core
 
 open Std
 
@@ -66,6 +66,8 @@ module Stm = struct
         | Let of var
         | Exp of Exp.t
         | Return of Exp.t option
+        | Jump of string option
+        | Break of string option
     [@@deriving show]
 
 end

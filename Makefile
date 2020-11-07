@@ -7,7 +7,7 @@ all:
 
 # install necessary packages
 init:
-	opam install merlin ocp-indent dune utop base core menhir ppx_deriving
+	opam install merlin ocp-indent dune utop core menhir ppx_deriving
 
 clean: 
 	rm -rf ./_build/*
