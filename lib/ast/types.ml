@@ -54,10 +54,16 @@ module Exp = struct
 end
 
 module Stm = struct
+    type var = 
+        { name : string
+        ; ty   : Type.t
+        ; v    : Exp.t
+        }
+    [@@deriving show]
+
     type t =
-        | Block of t list
-        | Let of string * Type.t * Exp.t
-        | Label of string
+        | Scope of string option * var list * Exp.t option * t list
+        | Let of var
         | Exp of Exp.t
         | Return of Exp.t option
     [@@deriving show]
@@ -69,7 +75,7 @@ module Fn = struct
         { name : string
         ; args : Field.t list
         ; ty   : Type.t
-        ; stm : Stm.t
+        ; stms : Stm.t list
         }
     [@@deriving show]
 end

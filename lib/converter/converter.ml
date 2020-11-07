@@ -163,24 +163,65 @@ let rec get_exp (e : A.Exp.t) (ty_ns : string_type_map) (fn_ns : string_fn_map) 
                              else I.Exp.App (le, res, fr)
 
 
-let rec get_stm (s : A.Stm.t) (ty_ns : string_type_map) (fn_ns : string_fn_map) (var_ns : string_var_map) (structs : int_struct_map) : (I.Stm.t * string_var_map) =
-    match s with
-        | A.Stm.Block ss      -> 
-            (I.Stm.Block 
-                (let (r, _) = (List.fold ss ~init:([], var_ns)  (* TODO: maybe fold other way here *)
-                                            ~f:(fun acc a -> 
-                                                let (ss, var_ns) = acc in
-                                                let (s, nvar_ns) = (get_stm a ty_ns fn_ns var_ns structs) in
-                                                (s :: ss, nvar_ns)))
-                 in r), var_ns)
         | A.Stm.Let (n, t, v) -> 
             let lt = get_ty ty_ns t in
             let ni = next_ident () in
             let nvar_ns = Map.update var_ns n ~f:(fun _ -> {id = ni; ty = lt }) in
             (I.Stm.Let (ni, lt, get_exp v ty_ns fn_ns var_ns structs), nvar_ns)
-        | A.Stm.Label _       -> (I.Stm.Label (next_ident ()), var_ns) (* TODO: label_ns *)
+
+let get_var (v : A.Stm.var) (ty_ns : string_type_map) (fn_ns : string_fn_map) (var_ns : string_var_map) (structs : int_struct_map)
+        : I.Stm.var =
+    let lt = get_ty ty_ns t in
+    let ni = next_ident () in
+    { id = ni
+    ; ty = lt
+    ; v = get_exp v ty_ns fn_ns var_ns structs
+    }
+
+let rec get_stm 
+        (s : A.Stm.t) 
+        (ty_ns : string_type_map) 
+        (fn_ns : string_fn_map) 
+        (var_ns : string_var_map) 
+        (structs : int_struct_map) 
+        (lable_ns : string_int_map)
+        : (I.Stm.t * string_var_map) =
+    match s with
+        | A.Stm.Scope (mn, vs, me, ss) -> 
+            let ni = next_ident () in
+            let nlabel_ns = Map.update label_ns (Option.value mn ~default:"__label") ~f:(fun _ -> ni) in
+            let (vss, nvar_ns) = List.fold vs ~init:([], var_ns) 
+                                   ~f:(fun acc a ->
+                                        let (vs, var_ns) = acc in
+                                        let v = get_var a ty_ns fn_ns var_ns structs in
+                                        let nvar_ns = Map.update var_ns a.name ~f:(fun _ -> { id = v.id; ty = v.ty } ) in
+                                        (v :: vs, nvar_ns))
+            in
+            let ne = Option.map me ~f:(fun a -> get_exp a ty_ns fn_ns var_ns structs) in
+            let nss = get_stm_list ss ty_ns fn_ns nvar_ns structs nlabel_ns in
+            (I.Stm.Scope (ni, vss, ne, nss), var_ns)
+        | A.Stm.Let v -> 
+            let lt = get_ty ty_ns v.ty in
+            let ni = next_ident () in
+            let nvar_ns = Map.update var_ns v.name ~f:(fun _ -> {id = ni; ty = lt }) in
+            (I.Stm.Let (I.Stm.var { id = ni; ty = lt; v = get_exp v.v ty_ns fn_ns var_ns structs }), nvar_ns)
         | A.Stm.Exp e         -> (I.Stm.Exp (get_exp e ty_ns fn_ns var_ns structs), var_ns)
         | A.Stm.Return me     -> (I.Stm.Return (Option.map me ~f:(fun a -> get_exp a ty_ns fn_ns var_ns structs)), var_ns)
+
+and get_stm_list 
+        (ss: A.Stm.t list)
+        (ty_ns  : string_type_map)
+        (fn_ns : string_fn_map)
+        (var_ns : string_var_map)
+        (structs : int_struct_map)
+        (label_ns : string_int_map)
+        : I.Stm.t list =
+    let (r, _) = List.fold ss ~init:([], var_ns) (* TODO: maybe fold other way *)
+                              ~f:(fun acc a ->
+                                    let (ss, var_ns) = acc in
+                                    let (s, nvar_ns) = (get_stm a ty_ns fn_ns var_ns structs) in
+                                    (s :: ss, nvar_ns))
+    in r
 
 
 let get_fn (m : A.Module.t) (ty_ns : string_type_map) (fn_ns : string_fn_map) (structs : int_struct_map): int_fn_map =
@@ -191,7 +232,8 @@ let get_fn (m : A.Module.t) (ty_ns : string_type_map) (fn_ns : string_fn_map) (s
                        ~data:({ id = fns.id
                              ; args = List.map f.args ~f:(fun a -> get_field a var_ns)
                              ; ty = (let (_, r) = fns.ty in r)
-                             ; stm = let (s, _) = get_stm f.stm ty_ns fn_ns var_ns structs in s
+                             ; stms = get_stm_list f.stms ty_ns fn_ns var_ns structs (Map.empty (module String))
+                             (*let (s, _) = get_stm f.stm ty_ns fn_ns var_ns structs in s*)
                              } : I.Fn.t)
     ) (Map.empty (module Int)) m
 

@@ -49,6 +49,7 @@
 %type <Types.Exp.t> p_exp_spipe
 %type <Types.Exp.t> p_exp
 
+%type <Types.Stm.var> p_var
 %type <Types.Stm.t> p_stm
 
 %%
@@ -71,8 +72,8 @@ p_field:
     | n = ID; COLON; t = p_type { { name = n; ty = t }}
 
 p_fn:
-    | FN; n = ID; LPAREN; ags = separated_list(COMMA, p_field); RPAREN; ARROW; t = p_type; s = p_stm 
-        { { name = n; args = ags; ty = t; stm = s }} 
+    | FN; n = ID; LPAREN; ags = separated_list(COMMA, p_field); RPAREN; ARROW; t = p_type; LBRACE; ss = list(p_stm); RBRACE
+        { { name = n; args = ags; ty = t; stms = ss }} 
 
 p_type:
     | LPAREN; ags = separated_list(COMMA, p_type); RPAREN; ARROW; r = p_type { Types.Type.Fn (ags, r) }
@@ -104,10 +105,14 @@ p_exp_dollar:
 p_exp:
     | e = p_exp_dollar { e }
 
+p_var:
+    | n = ID; COLON; t = p_type; EQ; e = p_exp { { name = n; ty = t; v = e } }
+
 p_stm:
-    | LBRACE; stms = list(p_stm); RBRACE { Types.Stm.Block stms }
     | e = p_exp; SEMICOLON { Types.Stm.Exp e }
-    | RETURN; e = p_exp; SEMICOLON { Types.Stm.Return (Some e) }
-    | RETURN; SEMICOLON { Types.Stm.Return None }
-    | LET; n = ID; COLON; t = p_type; EQ; e = p_exp; SEMICOLON { Types.Stm.Let (n, t, e) }
-    | n = ID; COLON { Types.Stm.Label n }
+    | RETURN; e = option(p_exp); SEMICOLON { Types.Stm.Return e }
+    | v = p_var; SEMICOLON { Types.Stm.Let v }
+    | n = option(ID); LBRACK; vs = separated_list(COMMA, p_var) RBRACK; e = option(p_exp); LBRACE; stms = list(p_stm); RBRACE { 
+        Types.Stm.Scope (n, vs, e, stms) }
+    | n = option(ID); e = option(exp); LBRACE; stms = list(p_stm); RBRACE {
+        Types.Stm.Scope (n, [], e, stms) }
