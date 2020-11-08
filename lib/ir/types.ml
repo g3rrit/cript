@@ -71,11 +71,16 @@ module Stm = struct
 end
 
 module Fn = struct 
+    type tag =
+        | Main
+    [@@deriving show, equal]
+
     type t =
         { id   : int
         ; args : Field.t list
         ; ty   : Type.t
         ; stms : Stm.t list
+        ; tags : tag list
         }
     [@@deriving show]
 end
@@ -104,6 +109,7 @@ end
 module Unit = struct
     type t =
         { mods : (int, Module.t, Int.comparator_witness) Map.t
+        ; main : int
         }
 
     let show (_ : t) : string =

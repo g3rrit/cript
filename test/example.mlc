@@ -1,8 +1,6 @@
 module main
 
 
-struct int {}
-
 struct foo_t { 
     b : int; 
     a : () -> int;
@@ -23,7 +21,7 @@ fn main () -> int {
         return 0;
     }
 
-    begin a [ i : int = 10 ] i {
+    begin a [ i : int = 112310 ] i {
         jmp a;
         brk a;
     }

@@ -1,5 +1,6 @@
 open Std
 open Core
+open Converter.Prim
 
 open Ir.Types
 
@@ -17,7 +18,9 @@ let rec write_list fd xs ~sep:s ~f:a =
 
 let rec cgen_type_start (fd : Out_channel.t) (t : Type.t) : unit =
     match t with
-        | Prim p -> write fd "i%d " p
+        | Prim p -> if List.exists prim_type_list ~f:(fun a -> Int.equal a.id p)
+                    then List.iter prim_type_list ~f:(fun a -> write fd "%s " a.name)
+                    else write fd "i%x " p
         | Fn (_, r) -> cgen_type_start fd r; write fd "(*" 
 
 let rec cgen_type_end (fd : Out_channel.t) (t : Type.t) : unit =
@@ -35,30 +38,30 @@ let cgen_type (fd: Out_channel.t) (t : Type.t) : unit =
 
 let cgen_field (fd : Out_channel.t) (arg : Field.t) : unit = 
     cgen_type_start fd arg.ty
-    ; write fd "i%d" arg.id
+    ; write fd "i%x" arg.id
     ; cgen_type_end fd arg.ty
 
 let cgen_fn_decl (fd : Out_channel.t) (f : Fn.t) : unit =
     cgen_type_start fd f.ty 
-    ; write fd "i%d (" f.id 
+    ; write fd "i%x (" f.id 
     ; write_list fd f.args ~sep:"," ~f:cgen_field
     ; write fd ")"
     ; cgen_type_end fd f.ty
 
 let cgen_struct_fd (fd : Out_channel.t) (s : Struct.t) : unit =
-    write fd "struct i%d" s.id
+    write fd "struct i%x" s.id
 
 (* DEFINITIONS *)
 
 let cgen_struct (fd: Out_channel.t) (s : Struct.t) : unit =
-    write fd "struct i%d {\n" s.id
+    write fd "struct i%x {\n" s.id
     ; List.iter s.fs ~f:(fun m -> cgen_field fd m; write fd ";\n")
     ; write fd "}"
 
 let rec cgen_exp (fd: Out_channel.t) (e: Exp.t) : unit =
     let cgen_exp_prim = function
         | Exp.PInt v    -> write fd "%d" v
-        | Exp.PString v -> write fd "%s" v
+        | Exp.PString v -> write fd "\"%s\"" v
     in
     match e with 
         | Exp.App (e, args, _) -> write fd "("
@@ -66,41 +69,41 @@ let rec cgen_exp (fd: Out_channel.t) (e: Exp.t) : unit =
                                   ; write fd ")("
                                   ; write_list fd args ~sep:"," ~f:cgen_exp
                                   ; write fd ")"
-        | Exp.Ref (n, _) -> write fd "i%d" n
+        | Exp.Ref (n, _) -> write fd "i%x" n
         | Exp.Prim p     -> cgen_exp_prim p
         | Exp.Access (e, m, _) -> write fd "(("
                             ; cgen_exp fd e
-                            ; write fd ").i%d" m
+                            ; write fd ").i%x" m
                             ; write fd ")"
 
 let cgen_var (fd: Out_channel.t) (v : Stm.var) : unit = 
      cgen_type_start fd v.ty
-    ; write fd "i%d" v.id
+    ; write fd "i%x" v.id
     ; cgen_type_end fd v.ty
     ; write fd " = "
     ; cgen_exp fd v.v
-    ; write fd "\n"
+    ; write fd ";\n"
 
 let rec cgen_stm (fd: Out_channel.t) (stm: Stm.t) : unit =
     match stm with
         | Stm.Scope (n, vs, me, ss) -> write fd "{\n"
                                        ; List.iter vs ~f:(cgen_var fd)
-                                       ; write fd "l%d_start:\n" n
+                                       ; write fd "l%x_start:\n" n
                                        ; Option.iter me ~f:(fun e -> write fd "if (!("
                                                                      ; cgen_exp fd e
-                                                                     ; write fd ")) { goto l%d_end; }\n" n)
+                                                                     ; write fd ")) { goto l%x_end; }\n" n)
                                        ; write fd "{\n"
                                        ; (match ss with 
                                             | [] -> assert false
                                             | s :: _ -> cgen_stm fd s)
                                        (*List.iter ss ~f:(cgen_stm fd) *)
-                                       ; write fd "}\n}\nl%d_end:\n" n
+                                       ; write fd "}\n}\nl%x_end:\n" n
         | Stm.Let v -> cgen_var fd v
         | Stm.Exp e         -> cgen_exp fd e; write fd ";\n"
         | Stm.Return me     -> write fd "return "
                                ; Option.map me ~f:(cgen_exp fd) |> ignore; write fd ";\n"
-        | Stm.Jump n        -> write fd "goto l%d_start;\n" n
-        | Stm.Break n       -> write fd "goto l%d_end;\n" n
+        | Stm.Jump n        -> write fd "goto l%x_start;\n" n
+        | Stm.Break n       -> write fd "goto l%x_end;\n" n
 
 let cgen_fn (fd: Out_channel.t) (f: Fn.t) : unit =
     cgen_fn_decl fd f
@@ -110,7 +113,7 @@ let cgen_fn (fd: Out_channel.t) (f: Fn.t) : unit =
 
 
 let cgen_module (fd : Out_channel.t) (m : Module.t) : unit =
-    write fd "// MODULE (%s)[%d]\n//---------------\n" (File.show m.file) m.id
+    write fd "// MODULE (%s)[%x]\n//---------------\n" (File.show m.file) m.id
     ; write fd "\n// STRUCT FORWARD DECLARATIONS\n\n"
     ; Map.iter m.ds ~f:(fun s -> cgen_struct_fd fd s; write fd ";\n")
     ; write fd "\n// FUNCTION FORWARD DECLARAIONS\n\n"

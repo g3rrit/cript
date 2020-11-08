@@ -7,6 +7,8 @@ open Namespace
 module A = Ast.Types
 module I = Ir.Types
 
+module Prim = Prim
+
 (* converter functions *)
 let cident = ref 0
 
@@ -197,6 +199,7 @@ let get_fn (m : A.Module.t) (ty_ns : string_type_map) (fn_ns : string_fn_map) (s
                              ; args = List.map f.args ~f:(fun a -> get_field a var_ns)
                              ; ty = (let (_, r) = fns.ty in r)
                              ; stms = get_stm_list f.stms ty_ns fn_ns var_ns structs (Map.empty (module String))
+                             ; tags = if f.name == "main" then [I.Fn.Main] else []
                              (*let (s, _) = get_stm f.stm ty_ns fn_ns var_ns structs in s*)
                              } : I.Fn.t)
     ) (Map.empty (module Int)) m
@@ -224,7 +227,7 @@ let convert (ms : A.Module.t list) : I.Unit.t = (* this is all so inefficient *)
     in
     let struct_map = Map.of_alist_exn (module Int) structss in
     let fn_map = Map.of_alist_exn (module Int) fnss in 
-    { mods = (List.fold ms ~init:(Map.empty (module Int)) 
+    let mods = (List.fold ms ~init:(Map.empty (module Int)) 
                            ~f:(fun acc m -> 
                             let mid = get_mid m.name in
                             Map.add_exn acc ~key:mid
@@ -234,4 +237,11 @@ let convert (ms : A.Module.t list) : I.Unit.t = (* this is all so inefficient *)
                                                    ; ds = Map.find_exn struct_map mid
                                                    ; incs = List.map m.incs ~f:get_mid
                                                    } : I.Module.t)))
+    in
+    let main_mod = List.find (Map.data mods) ~f:(fun m -> 
+        Map.exists m.fs ~f:(fun f -> List.mem I.Fn.Main f.tags 
+                                ~compare:(fun a _ -> (match a with | Main -> true | _ -> false))))
+    in
+    { mods = mods
+    ; main = main
     }
