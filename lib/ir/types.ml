@@ -73,7 +73,7 @@ end
 module Fn = struct 
     type tag =
         | Main
-    [@@deriving show, equal]
+    [@@deriving show]
 
     type t =
         { id   : int
