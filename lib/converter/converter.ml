@@ -91,7 +91,12 @@ let rec get_exp (e : A.Exp.t) (ty_ns : string_type_map) (fn_ns : string_fn_map) 
     end in
     match e with
         | A.Exp.Prim p        -> I.Exp.Prim (get_pexp p)
-        | A.Exp.Ref s         -> let v = (Map.find_exn var_ns s) in I.Exp.Ref (v.id, v.ty)
+        | A.Exp.Ref s         -> let v = Option.map (Map.find var_ns s) ~f:(fun v -> I.Exp.Ref (v.id, v.ty)) in 
+                                 if Option.is_some v
+                                 then Option.value_exn v
+                                 else let f = (Map.find_exn fn_ns s) in 
+                                      let (fty, ftyr) = f.ty
+                                      in I.Exp.Ref (f.id, I.Type.Fn (fty, ftyr))
         | A.Exp.Call e        -> 
             let le = get_exp e ty_ns fn_ns var_ns structs in
             let t = I.Exp.get_type le in
@@ -199,7 +204,7 @@ let get_fn (m : A.Module.t) (ty_ns : string_type_map) (fn_ns : string_fn_map) (s
                              ; args = List.map f.args ~f:(fun a -> get_field a var_ns)
                              ; ty = (let (_, r) = fns.ty in r)
                              ; stms = get_stm_list f.stms ty_ns fn_ns var_ns structs (Map.empty (module String))
-                             ; tags = if f.name == "main" then [I.Fn.Main] else []
+                             ; tags = if String.equal f.name "main" then [I.Fn.Main] else []
                              (*let (s, _) = get_stm f.stm ty_ns fn_ns var_ns structs in s*)
                              } : I.Fn.t)
     ) (Map.empty (module Int)) m
@@ -239,9 +244,11 @@ let convert (ms : A.Module.t list) : I.Unit.t = (* this is all so inefficient *)
                                                    } : I.Module.t)))
     in
     let main_mod = List.find (Map.data mods) ~f:(fun m -> 
-        Map.exists m.fs ~f:(fun f -> List.mem I.Fn.Main f.tags 
-                                ~compare:(fun a _ -> (match a with | Main -> true | _ -> false))))
+        Map.exists m.fs ~f:(fun f -> List.exists f.tags 
+                                ~f:(fun a -> (match a with | I.Fn.Main -> true)))) |> Option.value_exn
     in
+    let main = ref 0 in
+    let () = Map.iter main_mod.fs ~f:(fun f -> if List.exists f.tags ~f:(fun a -> (match a with | I.Fn.Main -> true)) then main := f.id else ()) in
     { mods = mods
-    ; main = main
+    ; main = !main
     }

@@ -2,8 +2,8 @@
 # opam switch create . opam-base-compiler.4.10.0
 
 all:
-	dune build app/mlc.exe
-	./_build/default/app/mlc.exe -c clang test/example.mlc
+	dune build app/cript.exe
+	./_build/default/app/cript.exe -c clang test/example.cr
 
 # install necessary packages
 init:

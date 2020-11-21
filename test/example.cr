@@ -11,11 +11,15 @@ struct bar_t {
     a : int;
 }
 
-fn main () -> int {
+fn vtest() -> void {}
+
+fn main (argc : int, argv : int) -> int {
 
     a : int = 2;
 
     b : int = a;
+
+    #(print_int) a;
 
     begin a [] {
         return 0;

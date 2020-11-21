@@ -54,6 +54,7 @@ rule read =
   | ','       { COMMA }
   | "->"      { ARROW }
   | '$'       { DOLLAR }
+  | '#'       { HASH }
   | '\\'      { BACKSLASH }
 
   | int       { INT (int_of_string (Lexing.lexeme lexbuf)) }

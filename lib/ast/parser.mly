@@ -25,6 +25,7 @@
 %token SEMICOLON
 %token COMMA
 %token ARROW
+%token HASH
 
 %token LPAREN
 %token RPAREN
@@ -90,7 +91,8 @@ p_prim:
 p_exp_basic:
     | LPAREN; e = p_exp; RPAREN { e }
     | e = p_prim { Types.Exp.Prim e }
-    | i = ID; { Types.Exp.Ref i }
+    | i = ID { Types.Exp.Ref i }
+    | HASH; LPAREN; e = p_exp RPAREN { Types.Exp.Call e }
 
 p_exp_app:
     | l = p_exp_app; r = p_exp_basic { Types.Exp.App (l, r) }

@@ -1,4 +1,4 @@
 (executable 
-    (name mlc)
+    (name cript)
     (libraries core pipe)
     (preprocess (pps ppx_jane ppx_deriving.show)))
