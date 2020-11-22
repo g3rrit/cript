@@ -17,9 +17,15 @@ fn main (argc : int, argv : int) -> int {
 
     a : int = 2;
 
+    fn test(a : int) {
+        #print_int a;
+    }
+
     b : int = a;
 
-    #(print_int) a;
+    #print_int a;
+
+    #test 10;
 
     begin a [] {
         return 0;

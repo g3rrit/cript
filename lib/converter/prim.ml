@@ -28,11 +28,10 @@ type prim_function =
     ; args : prim_type list
     ; ret  : prim_type
     ; id   : int
-    ; c_impl : string
     }
 
-let fn_add = { name = "add"; args = [ty_int; ty_int]; ret = ty_int; id = 0x101; c_impl = "int i101(int a, int b) { return a + b; }" }
-let fn_print_int = { name = "print_int"; args = [ty_int]; ret = ty_void; id = 0x102; c_impl = "void i102(int a) { printf(\"%d\", a); }" }
+let fn_add = { name = "add"; args = [ty_int; ty_int]; ret = ty_int; id = 0x101}
+let fn_print_int = { name = "print_int"; args = [ty_int]; ret = ty_void; id = 0x102}
 
 let prim_function_list : prim_function list =
     [ fn_add

@@ -1,111 +1,60 @@
-open Core
-
 open Std
 
-module type Show = sig 
-    type t
-    val to_string : t -> string
-end
+type type_t =
+    | Type_prim of string
+    | Type_fn of type_t list * type_t
 
-(* 
-let paren (type a) (module S : Show with type t = a) (v : a) =
-    "(" ^ (S.to_string v) ^ ")"
-*)
+type field_t = 
+    { name : string
+    ; ty   : type_t
+    }
 
-let paren (s : string) : string =
-    "(" ^ s ^ ")"
+type exp_prim_t = 
+    | Exp_prim_int of int
+    | Exp_prim_string of string
 
-let brack (s : string) : string =
-    "{" ^ s ^ "}"
+and exp_t =
+    | Exp_app of exp_t * exp_t
+    | Exp_ref of string
+    | Exp_prim of exp_prim_t
+    | Exp_access of exp_t * string
+    | Exp_call of exp_t
 
-let brace (s : string) : string =
-    "[" ^ s ^ "]"
+type stm_var_t = 
+    { name : string
+    ; ty   : type_t
+    ; v    : exp_t
+    }
 
-module Type = struct 
-    type t =
-        | Prim of string
-        | Fn of t list * t
-    [@@deriving show]
+type stm_t =
+    | Stm_scope of string option * stm_var_t list * exp_t option * stm_t list
+    | Stm_let of stm_var_t
+    | Stm_exp of exp_t
+    | Stm_return of exp_t option
+    | Stm_jump of string option
+    | Stm_break of string option
+    | Stm_fn of fn_t
+    | Stm_struct of struct_t
 
-end
+and fn_t =
+    { fname : string
+    ; args  : field_t list
+    ; ty    : type_t
+    ; stms  : stm_t list
+    }
 
-module Field = struct 
-    type t = 
-        { name : string
-        ; ty   : Type.t
-        }
-    [@@deriving show]
+and struct_t =
+    { sname : string 
+    ; fs    : field_t list
+    }
 
-end
+type toplevel_t = 
+    | Toplevel_struct of struct_t
+    | Toplevel_fn of fn_t
 
-module Exp = struct
-    type prim = 
-        | PInt of int
-        | PString of string
-
-    and t =
-        | App of t * t
-        | Ref of string
-        | Prim of prim
-        | Access of t * string
-        | Call of t
-    [@@deriving show]
-
-end
-
-module Stm = struct
-    type var = 
-        { name : string
-        ; ty   : Type.t
-        ; v    : Exp.t
-        }
-    [@@deriving show]
-
-    type t =
-        | Scope of string option * var list * Exp.t option * t list
-        | Let of var
-        | Exp of Exp.t
-        | Return of Exp.t option
-        | Jump of string option
-        | Break of string option
-    [@@deriving show]
-
-end
-
-module Fn = struct 
-    type t =
-        { name : string
-        ; args : Field.t list
-        ; ty   : Type.t
-        ; stms : Stm.t list
-        }
-    [@@deriving show]
-end
-
-module Struct = struct 
-    type t =
-        { name : string 
-        ; fs   : Field.t list
-        }
-    [@@deriving show]
-
-end
-
-module Toplevel = struct
-    type t = 
-        | Struct of Struct.t 
-        | Fn of Fn.t
-    [@@deriving show]
-
-end
-
-module Module = struct
-
-    type t =
-        { file : File.t
-        ; name : string
-        ; tls  : Toplevel.t list
-        ; incs : string list
-        }
-    [@@deriving show]
-end
+type module_t =
+    { file : File.t
+    ; name : string
+    ; tls  : toplevel_t list
+    ; incs : string list
+    }

@@ -1,3 +1,7 @@
+%{
+open Types
+%}
+
 %token <string> ID
 %token <int> INT
 %token <string> STRING
@@ -36,24 +40,25 @@
 %token EOF
 
 
-%start <(string * string list * Types.Toplevel.t list)> entry
+%start <(string * string list * toplevel_t list)> entry
 
-%type <Types.Toplevel.t> p_toplevel
-%type <Types.Fn.t> p_fn
-%type <Types.Struct.t> p_struct
-%type <Types.Field.t> p_struct_field
-%type <Types.Field.t> p_field
-%type <Types.Type.t> p_type
+%type <toplevel_t> p_toplevel
+%type <fn_t> p_fn
+%type <struct_t> p_struct
+%type <field_t> p_struct_field
+%type <field_t> p_field
+%type <type_t> p_type
 
-%type <Types.Exp.prim> p_prim
-%type <Types.Exp.t> p_exp_basic
-%type <Types.Exp.t> p_exp_app
-%type <Types.Exp.t> p_exp_dollar
-%type <Types.Exp.t> p_exp_spipe
-%type <Types.Exp.t> p_exp
+%type <exp_prim_t> p_prim
+%type <exp_t> p_exp_basic
+%type <exp_t> p_exp_call
+%type <exp_t> p_exp_app
+%type <exp_t> p_exp_dollar
+%type <exp_t> p_exp_spipe
+%type <exp_t> p_exp
 
-%type <Types.Stm.var> p_var
-%type <Types.Stm.t> p_stm
+%type <stm_var_t> p_var
+%type <stm_t> p_stm
 
 %%
 
@@ -62,11 +67,11 @@ entry:
     | MODULE; n = ID; tls = list(p_toplevel); EOF { (n, ["__prim"; n], tls) }
 
 p_toplevel:
-    | d = p_struct { Types.Toplevel.Struct d }
-    | d = p_fn { Types.Toplevel.Fn d }
+    | d = p_struct { Toplevel_struct d }
+    | d = p_fn { Toplevel_fn d }
 
 p_struct:
-    | STRUCT; n = ID; LBRACE; f = list(p_struct_field) ; RBRACE { { name = n; fs = f } }
+    | STRUCT; n = ID; LBRACE; f = list(p_struct_field) ; RBRACE { { sname = n; fs = f } }
 
 p_struct_field:
     | f = p_field; SEMICOLON { f }
@@ -76,34 +81,37 @@ p_field:
 
 p_fn:
     | FN; n = ID; LPAREN; ags = separated_list(COMMA, p_field); RPAREN; ARROW; t = p_type; LBRACE; ss = list(p_stm); RBRACE
-        { { name = n; args = ags; ty = t; stms = ss }} 
+        { { fname = n; args = ags; ty = t; stms = ss }} 
 
 p_type:
-    | LPAREN; ags = separated_list(COMMA, p_type); RPAREN; ARROW; r = p_type { Types.Type.Fn (ags, r) }
-    | i = ID { Types.Type.Prim i }
+    | LPAREN; ags = separated_list(COMMA, p_type); RPAREN; ARROW; r = p_type { Type_fn (ags, r) }
+    | i = ID { Type_prim i }
 
 (* EXPRESSION *)
 
 p_prim:
-    | v = INT { Types.Exp.PInt v }
-    | s = STRING { Types.Exp.PString s }
+    | v = INT { Exp_prim_int v }
+    | s = STRING { Exp_prim_string s }
 
 p_exp_basic:
     | LPAREN; e = p_exp; RPAREN { e }
-    | e = p_prim { Types.Exp.Prim e }
-    | i = ID { Types.Exp.Ref i }
-    | HASH; LPAREN; e = p_exp RPAREN { Types.Exp.Call e }
+    | e = p_prim { Exp_prim e }
+    | i = ID { Exp_ref i }
 
-p_exp_app:
-    | l = p_exp_app; r = p_exp_basic { Types.Exp.App (l, r) }
+p_exp_call:
+    | HASH; e = p_exp_basic { Exp_call e }
     | e = p_exp_basic { e }
 
+p_exp_app:
+    | l = p_exp_app; r = p_exp_call { Exp_app (l, r) }
+    | e = p_exp_call { e }
+
 p_exp_spipe:
-    | l = p_exp_spipe; SPIPE; r = p_exp_app { Types.Exp.App (r, l) }
+    | l = p_exp_spipe; SPIPE; r = p_exp_app { Exp_app (r, l) }
     | e = p_exp_app { e }
 
 p_exp_dollar:
-    | l = p_exp_dollar; DOLLAR; r = p_exp_spipe { Types.Exp.App (l, r) }
+    | l = p_exp_dollar; DOLLAR; r = p_exp_spipe { Exp_app (l, r) }
     | e = p_exp_spipe { e }
 
 p_exp:
@@ -113,10 +121,12 @@ p_var:
     | n = ID; COLON; t = p_type; EQ; e = p_exp { { name = n; ty = t; v = e } }
 
 p_stm:
-    | e = p_exp; SEMICOLON { Types.Stm.Exp e }
-    | v = p_var; SEMICOLON { Types.Stm.Let v }
-    | RETURN; e = option(p_exp); SEMICOLON { Types.Stm.Return e }
-    | JMP; n = option(ID); SEMICOLON { Types.Stm.Jump n}
-    | BREAK; n = option(ID); SEMICOLON { Types.Stm.Break n}
+    | e = p_exp; SEMICOLON { Stm_exp e }
+    | v = p_var; SEMICOLON { Stm_let v }
+    | RETURN; e = option(p_exp); SEMICOLON { Stm_return e }
+    | JMP; n = option(ID); SEMICOLON { Stm_jump n}
+    | BREAK; n = option(ID); SEMICOLON { Stm_break n}
     | BEGIN; n = option(ID); LBRACK; vs = separated_list(COMMA, p_var) RBRACK; me = option(p_exp); LBRACE; stms = list(p_stm); RBRACE { 
-        Types.Stm.Scope (n, vs, me, stms) }
+        Stm_scope bn, vs, me, stms) }
+    | s = p_struct { Stm_struct s }
+    | f = p_fn { Stm_fn f }

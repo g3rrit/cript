@@ -130,20 +130,11 @@ let cgen_main (fd : Out_channel.t) (main : int) : unit =
     ; write fd "int main(int argc, char** argv) { return i%x(argc, argv); }\n" main
     ; write fd "\n// MAIN_END\n"
 
-let cgen_includes (fd : Out_channel.t) : unit =
-    write fd "#include <stdio.h>\n"
-
-let cgen_prim_fns (fd : Out_channel.t) : unit =
-    List.iter prim_function_list ~f:(fun f -> write fd "%s\n" f.c_impl)
-
 let cgen (u : Unit.t) : unit =
     let (file, fd) = Filename.open_temp_file "mlc_c_src" ".c" in
     Stdio.printf "Writing c src to [%s]\n" file
     ; write fd "// SRC [%s]\n" file
-    ; write fd "// INCLUDES\n"
-    ; cgen_includes fd
-    ; write fd "// PRIM FUNCTIONS\n"
-    ; cgen_prim_fns fd
+    ; write fd "%s" C_impl.header
     ; Map.iter u.mods ~f:(cgen_module fd) 
     ; cgen_main fd u.main
 
