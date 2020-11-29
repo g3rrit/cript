@@ -84,31 +84,32 @@ let cgen_var (fd: Out_channel.t) (v : Stm.var) : unit =
     ; cgen_exp fd v.v
     ; write fd ";\n"
 
-let rec cgen_stm (fd: Out_channel.t) (stm: Stm.t) : unit =
+let cgen_stm (fd: Out_channel.t) (stm: Stm.t) : unit =
     match stm with
-        | Stm.Scope (n, vs, me, ss) -> write fd "{\n"
-                                       ; List.iter vs ~f:(cgen_var fd)
-                                       ; write fd "l%x_start:\n" n
-                                       ; Option.iter me ~f:(fun e -> write fd "if (!("
-                                                                     ; cgen_exp fd e
-                                                                     ; write fd ")) { goto l%x_end; }\n" n)
-                                       ; write fd "{\n"
-                                       ; (match ss with 
-                                            | [] -> assert false
-                                            | s :: _ -> cgen_stm fd s)
-                                       (*List.iter ss ~f:(cgen_stm fd) *)
-                                       ; write fd "}\n}\nl%x_end:\n" n
         | Stm.Let v -> cgen_var fd v
         | Stm.Exp e         -> cgen_exp fd e; write fd ";\n"
-        | Stm.Return me     -> write fd "return "
-                               ; Option.map me ~f:(cgen_exp fd) |> ignore; write fd ";\n"
-        | Stm.Jump n        -> write fd "goto l%x_start;\n" n
-        | Stm.Break n       -> write fd "goto l%x_end;\n" n
+        | Stm.Label n       -> write fd "l%x:;\n" n (* semicolon is necessary here because of c99 syntax restrictions *)
+        | Stm.Jump (n, me)     -> 
+            (match me with
+                | None   -> write fd "goto l%x;\n" n
+                | Some e -> write fd "if ("
+                            ; cgen_exp fd e
+                            ; write fd ") { goto l%x; }\n" n)
+        | Stm.Assign (n, e) -> write fd "i%x = " n; cgen_exp fd e; write fd ";\n"
 
 let cgen_fn (fd: Out_channel.t) (f: Fn.t) : unit =
     cgen_fn_decl fd f
     ; write fd " {\n"
+    ; cgen_type_start fd f.ty
+    ; write fd "i%x" f.ret_val
+    ; cgen_type_end fd f.ty
+    ; write fd ";\n"
     ; List.iter f.stms ~f:(cgen_stm fd)
+    ; write fd "l%x:\n" f.ret_label
+    ; write fd "return "
+    ; (match f.ty with
+        | _ -> write fd "i%x;\n" f.ret_val
+      ) (* handle void type differently*)
     ; write fd "}"
 
 

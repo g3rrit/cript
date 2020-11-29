@@ -44,6 +44,7 @@ rule read =
   | "end"     { END }
   | "jmp"     { JMP }
   | "brk"     { BREAK }
+  | "defer"   { DEFER }
 
   (* builtin operators *)
   | '='       { EQ }

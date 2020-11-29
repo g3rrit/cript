@@ -33,6 +33,7 @@ type stm_t =
     | Stm_return of exp_t option
     | Stm_jump of string option
     | Stm_break of string option
+    | Stm_defer of stm_t list
     | Stm_fn of fn_t
     | Stm_struct of struct_t
 

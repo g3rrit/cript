@@ -59,12 +59,11 @@ module Stm = struct
     let pp_var _ _ = ()
 
     type t =
-        | Scope of int * var list * Exp.t option * t list
         | Let of var
         | Exp of Exp.t
-        | Return of Exp.t option
-        | Jump of int
-        | Break of int
+        | Label of int
+        | Jump of int * Exp.t option
+        | Assign of int * Exp.t
     [@@deriving show]
 
 
@@ -80,6 +79,8 @@ module Fn = struct
         ; args : Field.t list
         ; ty   : Type.t
         ; stms : Stm.t list
+        ; ret_val : int
+        ; ret_label : int
         ; tags : tag list
         }
     [@@deriving show]

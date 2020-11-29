@@ -4,6 +4,10 @@
 
 - int_(fn/struct)_map can be global state as their id is unique
 
+- add void as primitive type (functions that return void should be treate specially)
+- maybe just think about this and deal with it
+- having a void types ads weird complications
+
 #### Interfaces
 
 struct obj {

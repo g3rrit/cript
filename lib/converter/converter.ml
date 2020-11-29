@@ -70,6 +70,10 @@ module State = struct
 
 end
 
+type cb_t = 
+    { return_handle : (I.Exp.t option -> int -> I.Stm.t list)
+    }
+
 
 let fold_structs (m : A.module_t) (f : 'a -> A.struct_t -> 'a) (a: 'a) : 'a = 
     List.fold m.tls ~init:a ~f:(fun aa tl -> (match tl with
@@ -225,67 +229,96 @@ let get_var (mid : int) (v : A.stm_var_t) (ty_ns : string_type_map) (fn_ns : str
 let rec get_stm 
         (mid : int)
         (s : A.stm_t) 
+        (cb : cb_t)
         (ty_ns : string_type_map) 
         (fn_ns : string_fn_map) 
         (var_ns : string_var_map) 
         (label_ns : string_int_map)
-        : ((I.Stm.t list) * string_var_map * string_type_map * string_fn_map) =
+        (ret_label : int)
+        : ((I.Stm.t list) * (I.Stm.t list) * string_var_map * string_type_map * string_fn_map) =
     match s with
         | A.Stm_scope (mn, vs, me, ss) -> 
-            let ni = State.next_id () in
-            let nlabel_ns = Map.update label_ns (Option.value mn ~default:"__label") ~f:(fun _ -> ni) in
+            let jmp_i = State.next_id () in
+            let brk_i = State.next_id () in
+            let label_ns = Map.update label_ns ("__jmp" ^ (Option.value mn ~default:"__label")) ~f:(fun _ -> jmp_i) in
+            let label_ns = Map.update label_ns ("__brk" ^ (Option.value mn ~default:"__label")) ~f:(fun _ -> brk_i) in
             let (vss, nvar_ns) = List.fold vs ~init:([], var_ns) 
                                    ~f:(fun acc a ->
                                         let (vs, var_ns) = acc in
                                         let v = get_var mid a ty_ns fn_ns var_ns in
-                                        let nvar_ns = Map.update var_ns a.name ~f:(fun _ -> { id = v.id; ty = v.ty } ) in
-                                        (v :: vs, nvar_ns))
+                                        let var_ns = Map.update var_ns a.name ~f:(fun _ -> { id = v.id; ty = v.ty } ) in
+                                        (v :: vs, var_ns))
             in
             let ne = Option.map me ~f:(fun a -> get_exp mid a ty_ns fn_ns nvar_ns ) in
-            let nss = get_stm_list mid ss ty_ns fn_ns nvar_ns nlabel_ns in
-            ([I.Stm.Scope (ni, List.rev vss, ne, nss)], var_ns, ty_ns, fn_ns)
+            let (nss, nssd) = get_stm_list mid ss cb ty_ns fn_ns nvar_ns label_ns ret_label in
+            let nss = List.concat 
+                [ (List.map vss ~f:(fun v -> I.Stm.Let v) |> List.rev)
+                ; [I.Stm.Label jmp_i ]
+                ; (match ne with | None -> [] | Some e -> [I.Stm.Jump (brk_i, Some e)])
+                ; nss
+                ; [I.Stm.Label brk_i]
+                ] in
+            (nss , nssd, var_ns, ty_ns, fn_ns)
         | A.Stm_let v -> 
             let lt = get_ty ty_ns v.ty in
             let ni = State.next_id () in
             let nvar_ns = Map.update var_ns v.name ~f:(fun _ -> {id = ni; ty = lt }) in
-            ([I.Stm.Let ({ id = ni; ty = lt; v = get_exp mid v.v ty_ns fn_ns var_ns })], nvar_ns, ty_ns, fn_ns)
-        | A.Stm_exp e         -> ([I.Stm.Exp (get_exp mid e ty_ns fn_ns var_ns )], var_ns, ty_ns, fn_ns)
-        | A.Stm_return me     -> ([I.Stm.Return (Option.map me ~f:(fun a -> get_exp mid a ty_ns fn_ns var_ns ))], var_ns, ty_ns, fn_ns)
+            ([I.Stm.Let ({ id = ni; ty = lt; v = get_exp mid v.v ty_ns fn_ns var_ns })], [], nvar_ns, ty_ns, fn_ns)
+        | A.Stm_exp e         -> ([I.Stm.Exp (get_exp mid e ty_ns fn_ns var_ns )], [], var_ns, ty_ns, fn_ns)
+        | A.Stm_return me     -> (cb.return_handle (Option.map me ~f:(fun a -> get_exp mid a ty_ns fn_ns var_ns )) ret_label
+                                 , [], var_ns, ty_ns, fn_ns)
         | A.Stm_jump mn       -> 
-            let v = Map.find_exn label_ns (Option.value mn ~default:"__label") in
-            ([I.Stm.Jump v], var_ns, ty_ns, fn_ns)
+            let v = Map.find_exn label_ns ("__jmp" ^ (Option.value mn ~default:"__label")) in
+            ([I.Stm.Jump (v, None)], [], var_ns, ty_ns, fn_ns)
         | A.Stm_break mn       -> 
-            let v = Map.find_exn label_ns (Option.value mn ~default:"__label") in
-            ([I.Stm.Break v], var_ns, ty_ns, fn_ns)
-        | A.Stm_struct s -> ([], var_ns, convert_struct mid s ty_ns, fn_ns)
-        | A.Stm_fn f     -> ([], var_ns, ty_ns, convert_fn mid f ty_ns fn_ns)
+            let v = Map.find_exn label_ns ("__brk" ^ (Option.value mn ~default:"__label")) in
+            ([I.Stm.Jump (v, None)], [], var_ns, ty_ns, fn_ns)
+        | A.Stm_defer ss -> let (ss, ssd) = get_stm_list mid ss cb ty_ns fn_ns var_ns label_ns ret_label in 
+                            ([], List.concat [ss; ssd], var_ns, ty_ns, fn_ns)
+        | A.Stm_struct s -> ([], [], var_ns, convert_struct mid s ty_ns, fn_ns)
+        | A.Stm_fn f     -> ([], [], var_ns, ty_ns, convert_fn mid f ty_ns fn_ns)
 
 and get_stm_list 
         (mid : int)
         (ss: A.stm_t list)
+        (cb : cb_t)
         (ty_ns  : string_type_map)
         (fn_ns : string_fn_map)
         (var_ns : string_var_map)
         (label_ns : string_int_map)
-        : I.Stm.t list =
-    let (r, _, _, _) = List.fold ss ~init:([], var_ns, ty_ns, fn_ns) (* TODO: maybe fold other way *)
+        (ret_label : int)
+        : I.Stm.t list * I.Stm.t list =
+    let (r, dr, _, _, _) = List.fold ss ~init:([], [], var_ns, ty_ns, fn_ns) (* TODO: maybe fold other way *)
                               ~f:(fun acc a ->
-                                    let (ss, var_ns, ty_ns, fn_ns) = acc in
-                                    let (s, nvar_ns, nty_ns, nfn_ns) = (get_stm mid a ty_ns fn_ns var_ns label_ns ) in
-                                    (List.concat [s; ss], nvar_ns, nty_ns, nfn_ns))
-    in (List.rev r)
+                                    let (ss, ssd, var_ns, ty_ns, fn_ns) = acc in
+                                    let (s, sd, nvar_ns, nty_ns, nfn_ns) = (get_stm mid a cb ty_ns fn_ns var_ns label_ns ret_label) in
+                                    (List.concat [List.rev s; ss], List.concat [List.rev sd; ssd], nvar_ns, nty_ns, nfn_ns))
+    in (List.rev r, dr)
 
 and convert_fn (mid : int) (f : A.fn_t) (ty_ns : string_type_map) (fn_ns : string_fn_map) : string_fn_map =
     let fn_ns = add_fn_ns f fn_ns ty_ns in
     let fns = Map.find_exn fn_ns f.fname in
     let var_ns = get_args_ns f.args ty_ns in
-    let stms = get_stm_list mid f.stms ty_ns fn_ns var_ns (Map.empty (module String)) in
+    let ret_id = State.next_id () in
+    let ret_label = State.next_id () in
+    let var_ns = (match f.ty with
+        | t -> Map.add_exn var_ns ~key:"__ret_val" ~data: { id = ret_id; ty = get_ty ty_ns t }
+        (* do something if void *)
+        ) in
+    let cb = { return_handle = (fun me rl ->
+                    match f.ty with
+                        | _ -> [ I.Stm.Assign (ret_id, (Option.value_exn me)); I.Stm.Jump (rl, None) ]
+                        (* handle void with error if expression contains no return value *)
+                    )
+             } in
+    let (stms, defers)  = get_stm_list mid f.stms cb ty_ns fn_ns var_ns (Map.empty (module String)) ret_label in
     State.add_fn mid ({ id = fns.id
                          ; args = List.map f.args ~f:(fun a -> get_field a var_ns)
                          ; ty = (let (_, r) = fns.ty in r)
-                         ; stms = stms
+                         ; stms = List.concat [stms; defers]
+                         ; ret_val = ret_id
+                         ; ret_label = ret_label
                          ; tags = [] (* maybe allow main inside function? *)
-                         (*let (s, _) = get_stm f.stm ty_ns fn_ns var_ns in s*)
                          } : I.Fn.t); fn_ns
 
 
@@ -293,13 +326,26 @@ let convert_fns (mid : int) (m : A.module_t) (ty_ns : string_type_map) (fn_ns : 
     iter_fns m (fun f -> 
         let fns = Map.find_exn fn_ns f.fname in
         let var_ns = get_args_ns f.args ty_ns in
-        let stms = get_stm_list mid f.stms ty_ns fn_ns var_ns (Map.empty (module String)) in
+        let ret_id = State.next_id () in
+        let ret_label = State.next_id () in
+        let var_ns = (match f.ty with
+            | t -> Map.add_exn var_ns ~key:"__ret_val" ~data: { id = ret_id; ty = get_ty ty_ns t }
+            (* do something if void *)
+            ) in
+        let cb = { return_handle = (fun me rl ->
+                        match f.ty with
+                            | _ -> [ I.Stm.Assign (ret_id, (Option.value_exn me)); I.Stm.Jump (rl, None) ]
+                            (* handle void with error if expression contains no return value *)
+                        )
+                 } in
+        let (stms, defers) = get_stm_list mid f.stms cb ty_ns fn_ns var_ns (Map.empty (module String)) ret_label in
         State.add_fn mid ({ id = fns.id
                              ; args = List.map f.args ~f:(fun a -> get_field a var_ns)
                              ; ty = (let (_, r) = fns.ty in r)
-                             ; stms = stms
+                             ; stms = List.concat [stms; defers]
+                             ; ret_val = ret_id
+                             ; ret_label = ret_label
                              ; tags = if String.equal f.fname "main" then [I.Fn.Main] else []
-                             (*let (s, _) = get_stm f.stm ty_ns fn_ns var_ns structs in s*)
                              } : I.Fn.t))
 
 let get_mod_ns (ms : A.module_t list) : string_int_map = 

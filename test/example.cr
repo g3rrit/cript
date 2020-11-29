@@ -11,23 +11,36 @@ struct bar_t {
     a : int;
 }
 
-fn vtest() -> void {}
+fn vtest() -> int { 
+
+    begin a [ i : int = 111 ] {
+        return i;
+    }
+
+    return 01; 
+}
 
 fn main (argc : int, argv : int) -> int {
 
     a : int = 2;
 
-    fn test(a : int) -> void {
+    fn test(a : int) -> int {
         #print_int a;
+        return 10;
     }
 
     b : int = 3;
+    c : int = 4;
+
+    defer {
+        #print_int c;
+    }
 
     #print_int a;
 
     #test b;
 
-    begin a [] {
+    begin a [ i : int = 123 ] {
         return 0;
     }
 

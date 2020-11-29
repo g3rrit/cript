@@ -19,6 +19,7 @@ open Types
 %token END
 %token JMP
 %token BREAK
+%token DEFER
 
 %token EQ
 %token PIPE
@@ -128,5 +129,6 @@ p_stm:
     | BREAK; n = option(ID); SEMICOLON { Stm_break n}
     | BEGIN; n = option(ID); LBRACK; vs = separated_list(COMMA, p_var); RBRACK; me = option(p_exp); LBRACE; stms = list(p_stm); RBRACE { 
         Stm_scope (n, vs, me, stms) }
+    | DEFER; LBRACE; stms = list(p_stm); RBRACE { Stm_defer stms }
     | s = p_struct { Stm_struct s }
     | f = p_fn { Stm_fn f }
