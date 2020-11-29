@@ -17,15 +17,15 @@ fn main (argc : int, argv : int) -> int {
 
     a : int = 2;
 
-    fn test(a : int) {
+    fn test(a : int) -> void {
         #print_int a;
     }
 
-    b : int = a;
+    b : int = 3;
 
     #print_int a;
 
-    #test 10;
+    #test b;
 
     begin a [] {
         return 0;

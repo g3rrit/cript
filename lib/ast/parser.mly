@@ -126,7 +126,7 @@ p_stm:
     | RETURN; e = option(p_exp); SEMICOLON { Stm_return e }
     | JMP; n = option(ID); SEMICOLON { Stm_jump n}
     | BREAK; n = option(ID); SEMICOLON { Stm_break n}
-    | BEGIN; n = option(ID); LBRACK; vs = separated_list(COMMA, p_var) RBRACK; me = option(p_exp); LBRACE; stms = list(p_stm); RBRACE { 
-        Stm_scope bn, vs, me, stms) }
+    | BEGIN; n = option(ID); LBRACK; vs = separated_list(COMMA, p_var); RBRACK; me = option(p_exp); LBRACE; stms = list(p_stm); RBRACE { 
+        Stm_scope (n, vs, me, stms) }
     | s = p_struct { Stm_struct s }
     | f = p_fn { Stm_fn f }
