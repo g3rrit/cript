@@ -12,6 +12,7 @@ type field_t =
 type exp_prim_t = 
     | Exp_prim_int of int
     | Exp_prim_string of string
+    | Exp_prim_bool of bool
 
 and exp_t =
     | Exp_app of exp_t * exp_t

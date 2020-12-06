@@ -30,6 +30,7 @@ module Exp = struct
     type prim = 
         | PInt of int
         | PString of string
+        | PBool of bool
 
     and t =
         | App of t * t list * Type.t
@@ -38,9 +39,10 @@ module Exp = struct
         | Access of t * int * Type.t
     [@@deriving show]
 
-    let get_ptype = function
+    let get_ptype = function (* TODO *)
         | PInt _    -> Type.Prim 0
         | PString _ -> Type.Prim 1
+        | PBool _   -> Type.Prim 2
 
     let get_type = function
         | App (_, _, t)    -> t
@@ -81,6 +83,7 @@ module Fn = struct
         ; stms : Stm.t list
         ; ret_val : int
         ; ret_label : int
+        ; ret_defer_id : int
         ; tags : tag list
         }
     [@@deriving show]

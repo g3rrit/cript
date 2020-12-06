@@ -8,6 +8,9 @@
 - maybe just think about this and deal with it
 - having a void types ads weird complications
 
+
+- check if types of exp in jump are bool
+
 #### Interfaces
 
 struct obj {

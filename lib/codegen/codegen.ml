@@ -54,7 +54,8 @@ let cgen_struct_fd (fd : Out_channel.t) (s : Struct.t) : unit =
 (* DEFINITIONS *)
 
 let cgen_struct (fd: Out_channel.t) (s : Struct.t) : unit =
-    write fd "struct i%x {\n" s.id
+    write fd "// STRUCT\n"
+    ; write fd "struct i%x {\n" s.id
     ; List.iter s.fs ~f:(fun m -> cgen_field fd m; write fd ";\n")
     ; write fd "}"
 
@@ -62,6 +63,7 @@ let rec cgen_exp (fd: Out_channel.t) (e: Exp.t) : unit =
     let cgen_exp_prim = function
         | Exp.PInt v    -> write fd "%d" v
         | Exp.PString v -> write fd "\"%s\"" v
+        | Exp.PBool v -> write fd (if v then "true" else "false")
     in
     match e with 
         | Exp.App (e, args, _) -> write fd "("
@@ -98,19 +100,21 @@ let cgen_stm (fd: Out_channel.t) (stm: Stm.t) : unit =
         | Stm.Assign (n, e) -> write fd "i%x = " n; cgen_exp fd e; write fd ";\n"
 
 let cgen_fn (fd: Out_channel.t) (f: Fn.t) : unit =
-    cgen_fn_decl fd f
+    write fd "// FUNCTION\n"
+    ; cgen_fn_decl fd f
     ; write fd " {\n"
     ; cgen_type_start fd f.ty
     ; write fd "i%x" f.ret_val
     ; cgen_type_end fd f.ty
     ; write fd ";\n"
+    ; write fd "bool i%x = false;\n" f.ret_defer_id
     ; List.iter f.stms ~f:(cgen_stm fd)
     ; write fd "l%x:\n" f.ret_label
     ; write fd "return "
     ; (match f.ty with
         | _ -> write fd "i%x;\n" f.ret_val
       ) (* handle void type differently*)
-    ; write fd "}"
+    ; write fd "}\n"
 
 
 let cgen_module (fd : Out_channel.t) (m : Module.t) : unit =
@@ -120,9 +124,9 @@ let cgen_module (fd : Out_channel.t) (m : Module.t) : unit =
     ; write fd "\n// FUNCTION FORWARD DECLARAIONS\n\n"
     ; Map.iter m.fs ~f:(fun f -> cgen_fn_decl fd f; write fd ";\n")
     ; write fd "\n// STRUCT DECLARAIONS\n\n"
-    ; Map.iter m.ds ~f:(fun s -> cgen_struct fd s; write fd ";\n")
+    ; Map.iter m.ds ~f:(fun s -> cgen_struct fd s; write fd ";\n\n")
     ; write fd "\n// FUNCTION DEFINTIONS\n\n"
-    ; Map.iter m.fs ~f:(fun f -> cgen_fn fd f; write fd "\n")
+    ; Map.iter m.fs ~f:(fun f -> cgen_fn fd f; write fd "\n\n")
     ; write fd "\n// MODULE_END\n"
 
 

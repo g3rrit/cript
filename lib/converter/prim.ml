@@ -15,12 +15,17 @@ type prim_type =
     ; id   : int
     }
 
-let ty_int = { name = "int"; id = 0x1 }
-let ty_void = { name = "void"; id = 0x2 }
+let ty_void = { name = "void"; id = 0x1 }
+let ty_int = { name = "int"; id = 0x2 }
+let ty_bool = { name = "bool"; id = 0x3 }
+
+let to_ir_type (pt : prim_type) : I.Type.t =
+    I.Type.Prim pt.id
 
 let prim_type_list : prim_type list =
-    [ ty_int
-    ; ty_void
+    [ ty_void
+    ; ty_int
+    ; ty_bool
     ]
 
 type prim_function =
