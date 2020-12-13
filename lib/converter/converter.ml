@@ -9,14 +9,7 @@ module I = Ir.Types
 
 module Prim = Prim
 
-(* converter functions *)
-let cident = ref 0
-
-
-let init () = 
-    cident := 0x1000 
-
-(* the state is global unlike the namespaces which are scope dependent *)
+(* The state is global unlike the namespaces which are scope dependent *)
 module State = struct
 
     let  struct_map : ((int, int_struct_map, Int.comparator_witness) Map.t) ref = ref (Map.empty (module Int))
@@ -74,6 +67,29 @@ type cb_t =
     { return_handle : (I.Exp.t option -> int -> I.Stm.t list)
     }
 
+(* Prim ir functions *)
+
+let ir_create_int (v : int) : I.Exp.t =
+    I.Exp.Prim (I.Exp.PInt v)
+
+let ir_create_bool (v : bool) : I.Exp.t =
+    I.Exp.Prim (I.Exp.PBool v)
+
+let ir_create_int_var (v : int) : (I.Stm.t * var_ns) =
+    let i = State.next_id () in
+    let ty = Prim.ir_ty_int in
+    (I.Stm.Let {id = i; ty = ty; v = ir_create_int v }, { id = i; ty = ty })
+
+let ir_create_bool_var (v : bool) : (I.Stm.t * var_ns) =
+    let i = State.next_id () in
+    let ty = Prim.ir_ty_bool in
+    (I.Stm.Let {id = i; ty = ty; v = ir_create_bool v}, { id = i; ty = ty })
+
+let ir_int_inc (i : int) : I.Stm.t =
+    I.Stm.Assign (i, I.Exp.App (Prim.ir_fn_add_exp, [I.Exp.Ref (i, Prim.ir_ty_int); ir_create_int 1], Prim.ir_ty_int))
+
+
+(* Utility functions *)
 
 let fold_structs (m : A.module_t) (f : 'a -> A.struct_t -> 'a) (a: 'a) : 'a = 
     List.fold m.tls ~init:a ~f:(fun aa tl -> (match tl with
@@ -116,9 +132,7 @@ let rec get_ty (ns : string_type_map) (t : A.type_t) : I.Type.t =
         | A.Type_prim s     -> I.Type.Prim (let sns = Map.find_exn ns s in sns.id)
         | A.Type_fn (ts, t) -> I.Type.Fn (List.map ts ~f:(get_ty ns), get_ty ns t)
 
-(* the next two functions basically do the same but the first is for structs inside functions *)
-let convert_struct (mid : int) (s : A.struct_t) (ty_ns : string_type_map) : string_type_map =
-    let ty_ns = add_ty_ns s ty_ns in
+let convert_struct_ (mid : int) (s : A.struct_t) (ty_ns : string_type_map) : string_type_map =
     let sns = Map.find_exn ty_ns s.sname in
     State.add_ty mid (({ id = sns.id
                    ; fs = (List.map s.fs 
@@ -127,15 +141,15 @@ let convert_struct (mid : int) (s : A.struct_t) (ty_ns : string_type_map) : stri
                                                    } : I.Field.t)))
                          }) : I.Struct.t) ; ty_ns
 
+
+(* the next two functions basically do the same but the first is for structs inside functions *)
+let convert_struct (mid : int) (s : A.struct_t) (ty_ns : string_type_map) : string_type_map =
+    let ty_ns = add_ty_ns s ty_ns in
+    convert_struct_ mid s ty_ns 
+
 let convert_structs (mid : int) (m : A.module_t) (ty_ns : string_type_map) : unit = 
-    iter_structs m (fun s -> 
-        let sns = Map.find_exn ty_ns s.sname in
-        State.add_ty mid (({ id = sns.id
-                       ; fs = (List.map s.fs 
-                                        ~f:(fun fd -> ({ id = Map.find_exn sns.fs fd.name
-                                                       ; ty = (get_ty ty_ns fd.ty )
-                                                       } : I.Field.t)))
-                             }) : I.Struct.t))
+    iter_structs m (fun s -> let _ : string_type_map = convert_struct_ mid s ty_ns in ())
+
 
 let add_fn_ns (f : A.fn_t) (fn_ns : string_fn_map) (ty_ns : string_type_map) : string_fn_map =
     let ci = State.next_id () in
@@ -227,6 +241,7 @@ let get_var (mid : int) (v : A.stm_var_t) (ty_ns : string_type_map) (fn_ns : str
     ; v = get_exp mid v.v ty_ns fn_ns var_ns
     }
 
+
 let rec get_stm 
         (mid : int)
         (s : A.stm_t) 
@@ -239,6 +254,7 @@ let rec get_stm
         : ((I.Stm.t list) * (I.Stm.t list) * string_var_map * string_type_map * string_fn_map * int) =
     match s with
         | A.Stm_scope (mn, vs, me, ss) -> 
+            let sta_i = State.next_id () in
             let jmp_i = State.next_id () in
             let brk_i = State.next_id () in
             let end_i = State.next_id () in
@@ -256,6 +272,16 @@ let rec get_stm
             let (nss, nssd) = get_stm_list mid ss cb ty_ns fn_ns nvar_ns label_ns brk_i in
             let nss = List.concat 
                 [ (List.map vss ~f:(fun v -> I.Stm.Let v) |> List.rev)
+                ; [I.Stm.Jump () ]
+                ; [I.Stm.Label sta_i ]
+                ; nss
+                ; nssd
+                ; [I.Stm.Label con_i ]
+                ; q
+
+
+
+
                 ; [I.Stm.Label jmp_i ]
                 ; (match ne with | None -> [] | Some e -> [I.Stm.Jump (end_i, Some e)])
                 ; nss
@@ -303,8 +329,7 @@ and get_stm_list
                                     (List.concat [List.rev s; ss], List.concat [List.rev sd; ssd], nvar_ns, nty_ns, nfn_ns, ret_label))
     in (List.rev r, dr)
 
-and convert_fn (mid : int) (f : A.fn_t) (ty_ns : string_type_map) (fn_ns : string_fn_map) : string_fn_map =
-    let fn_ns = add_fn_ns f fn_ns ty_ns in
+and convert_fn_ (mid : int) (f : A.fn_t) (ty_ns : string_type_map) (fn_ns : string_fn_map) : string_fn_map =
     let fns = Map.find_exn fn_ns f.fname in
     let var_ns = get_args_ns f.args ty_ns in
     let ret_id = State.next_id () in
@@ -322,7 +347,7 @@ and convert_fn (mid : int) (f : A.fn_t) (ty_ns : string_type_map) (fn_ns : strin
                         (* handle void with error if expression contains no return value *)
                     )
              } in
-    let var_ns = Map.add_exn var_ns ~key:"__ret_defer" ~data: { id = ret_defer_id; ty = Prim.to_ir_type Prim.ty_bool } in
+    let var_ns = Map.add_exn var_ns ~key:"__ret_defer" ~data: { id = ret_defer_id; ty = Prim.ir_ty_bool } in
     let (stms, defers)  = get_stm_list mid f.stms cb ty_ns fn_ns var_ns (Map.empty (module String)) ret_label in
     State.add_fn mid ({ id = fns.id
                          ; args = List.map f.args ~f:(fun a -> get_field a var_ns)
@@ -331,40 +356,15 @@ and convert_fn (mid : int) (f : A.fn_t) (ty_ns : string_type_map) (fn_ns : strin
                          ; ret_val = ret_id
                          ; ret_label = ret_label
                          ; ret_defer_id = ret_defer_id
-                         ; tags = [] (* maybe allow main inside function? *)
+                         ; tags = if String.equal f.fname "main" then [I.Fn.Main] else []
                          } : I.Fn.t); fn_ns
 
+and convert_fn (mid : int) (f : A.fn_t) (ty_ns : string_type_map) (fn_ns : string_fn_map) : string_fn_map =
+    let fn_ns = add_fn_ns f fn_ns ty_ns in
+    convert_fn_ mid f ty_ns fn_ns
 
 let convert_fns (mid : int) (m : A.module_t) (ty_ns : string_type_map) (fn_ns : string_fn_map) : unit =
-    iter_fns m (fun f -> 
-        let fns = Map.find_exn fn_ns f.fname in
-        let var_ns = get_args_ns f.args ty_ns in
-        let ret_id = State.next_id () in
-        let ret_label = State.next_id () in
-        let ret_defer_id = State.next_id () in
-        let var_ns = (match f.ty with
-            | t -> Map.add_exn var_ns ~key:"__ret_val" ~data: { id = ret_id; ty = get_ty ty_ns t }
-            (* do something if void *)
-            ) in
-        let cb = { return_handle = (fun me rl ->
-                        match f.ty with
-                            | _ -> [ I.Stm.Assign (ret_id, (Option.value_exn me))
-                                   ; I.Stm.Assign (ret_defer_id, I.Exp.Prim (I.Exp.PBool true))
-                                   ; I.Stm.Jump (rl, None) ]
-                            (* handle void with error if expression contains no return value *)
-                        )
-                 } in
-        let var_ns = Map.add_exn var_ns ~key:"__ret_defer" ~data: { id = ret_defer_id; ty = Prim.to_ir_type Prim.ty_bool } in
-        let (stms, defers) = get_stm_list mid f.stms cb ty_ns fn_ns var_ns (Map.empty (module String)) ret_label in
-        State.add_fn mid ({ id = fns.id
-                             ; args = List.map f.args ~f:(fun a -> get_field a var_ns)
-                             ; ty = (let (_, r) = fns.ty in r)
-                             ; stms = List.concat [stms; defers]
-                             ; ret_val = ret_id
-                             ; ret_label = ret_label
-                             ; ret_defer_id = ret_defer_id
-                             ; tags = if String.equal f.fname "main" then [I.Fn.Main] else []
-                             } : I.Fn.t))
+    iter_fns m (fun f -> let _ : string_fn_map = convert_fn_ mid f ty_ns fn_ns in ())
 
 let get_mod_ns (ms : A.module_t list) : string_int_map = 
     List.fold ms ~init:(Map.singleton (module String) "__prim" Prim.mod_id) ~f:(fun acc a -> Map.add_exn acc ~key:a.name ~data:(State.next_id ()))

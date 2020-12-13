@@ -11,6 +11,8 @@
 
 - check if types of exp in jump are bool
 
+- add condition to jmp and brk -> jmp [] brk [] | jmpc brkc  
+
 #### Interfaces
 
 struct obj {

@@ -42,3 +42,16 @@ type string_var_map = (string, var_ns, String.comparator_witness) Map.t
 let string_var_map_show (svm : string_var_map) : string =
     Map.fold svm ~init:"" ~f:(fun ~key:k ~data:d a -> String.concat [a ; k; ": "; Int.to_string d.id; "#"; I.Type.show d.ty ])
 
+
+type block_ref = string list
+
+let block_ref_push (br : block_ref) (bn : string) : block_ref =
+    bn :: br
+
+let block_ref_search (br : block_ref) (bn : string) : int =
+    let block_ref_search_ br bn i =
+        (match br with
+            | (x :: xs) -> if String.equal x bn then i else block_ref_search_ xs bn (i + 1) 
+            | []        -> raise (Std.Error.Err "no block with name") (* TODO: better error message *)
+        ) in
+    block_ref_search_ br bn 0
